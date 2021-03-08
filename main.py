@@ -14,7 +14,7 @@ dispositivos = []
 retServer = 0
 timeServerAut = 20
 timeDispAut = 10
-timeBuscaDisp = 60
+timeBuscaDisp = 240
 contTimer = 0
 timeCopiaApaga = 5
 
@@ -30,10 +30,9 @@ retServer = requests.get("http://box.shielder.com.br/controle/getAutorizaBox.php
  
 commpro = windll.LoadLibrary("plcommpro.dll")
 
-def setUserData(hcommpro, lines):
+def setData(hcommpro, lines, table):
     #for i in range(lines):
     #   print (lines[i])
-    table = "user" # User information table
     #data = "Pin=19999\tCardNo=13375401\tPassword=1\r\nPin=2\tCardNo=14128058\tPassword=1"
     p_table = create_string_buffer(table)
     str_buf = create_string_buffer(lines)
@@ -41,8 +40,8 @@ def setUserData(hcommpro, lines):
     return ret
 
 
-def getUsersData(hcommpro):
-    table = "user" # Download the user data from the user table
+def getData(hcommpro,table):
+    #table  Download the user data from the user table
     fieldname = "*" # Download all field information in the table
     pfilter = "" # Have no filtering conditions and thus download all information
     options = ""
@@ -54,8 +53,8 @@ def getUsersData(hcommpro):
     ret = commpro.GetDeviceData(hcommpro, query_buf, 4*1024*1024, query_table, query_fieldname, query_filter, query_options)
 
     #mylist = query_buf.value.split(',')
-    print("lista")
-    print(query_buf.value)
+    #print("lista")
+    #print(query_buf.value)
     lines = query_buf.value.split('\r\n')
     return lines
 
@@ -65,17 +64,22 @@ def deleteUser(hcommpro, user):
     p_table = create_string_buffer(table)
     p_data = create_string_buffer(data)
     ret = commpro.DeleteDeviceData(hcommpro, p_table, p_data, "")
+    return ret
 
 def connectDisp(lines):
-    for x in range(len(lines)):
+    if(not any('=' in s for s in lines)):
+        print("Nenhum dispositivo encontrado")
+        timeBuscaDisp = 60
+    
+    for i in range(len(lines)):
         #print("linha"+ lines[x])
         
-        if(len(lines[x]) > 1 and "=" in lines[x]):
+        if(len(lines[i]) > 1 and "=" in lines[i]):
             
             #print("linha"+lines[x])
-            res = dict(item.split("=") for item in lines[x].split(","))
+            res = dict(item.split("=") for item in lines[i].split(","))
             params = "protocol=TCP,ipaddress="+ res["IP"] +",port=4370,timeout=1000,passwd="
-            #print("parametros"+params)
+            print("parametros"+params)
             if(not any(x for x in dispositivos if x.sn == res["SN"])):
 
 
@@ -85,18 +89,18 @@ def connectDisp(lines):
                 print (hcommpro)
 
                 if(hcommpro != 0):
-
+                    timeBuscaDisp = 360
 
                     url = "http://box.shielder.com.br/controle/getAutorizaBox.php?mac="+ res["SN"] +"&ip="+res["IP"]
-                    x = requests.get(url)
-                    print("autoriza retorno"+str(x.text))
-                    if(int(x.text)>=4):
+                    idterminal = requests.get(url)
+                    print("autoriza retorno "+str(idterminal.text))
+                    if(int(idterminal.text)>=4):
                         #SETAR O ID DISP
-                        items = "DeviceID="+str(x)+",Door1SensorType=2,Door1Drivertime=6,Door1Intertime=3"
+                        items = "DeviceID="+str(idterminal.text)+",Door1SensorType=2,Door1Drivertime=6,Door1Intertime=3"
                         p_items = create_string_buffer(items)
                         ret = commpro.SetDeviceParam(hcommpro, p_items)
                         if(ret == 0):
-                            disp = Dispositivos(res["IP"],res["SN"], str(x),hcommpro)
+                            disp = Dispositivos(res["IP"],res["SN"], str(idterminal.text), hcommpro)
                             dispositivos.append(disp)
                             print(disp.sn)
                 
@@ -111,22 +115,52 @@ def connectDisp(lines):
 
                 #x = requests.get("http://box.shielder.com.br/controle/getAutorizaBox.php?mac="+ res["SN"] +"&ip="+res["IP"])
                 time.sleep(2)
-            #x = requests.get("http://box.shielder.com.br/controle/getAutorizaBox.php?mac="+ mac2 +"&ip="+ip)
-        
-        #print(res["Device"])
+
+    for i in range(len(dispositivos)):
+        if not any(dispositivos[i].sn in s for s in lines):
+            print("Dispositivo desconectado "+dispositivos[i].ip)
+            dispositivos.pop(i)
+            print("Procurando Dispositivos novamente")
+            lines = searchDevices()
+            print(lines)
+            #lines.append("MAC=TESTE03:18:99:C7:C2:3E,IP=192.168.0.202,SN=BBM4180048,Device=TESTE,Ver=AC Ver 4.3.4 Dec 29 2017")
+            connectDisp(lines)
+            
+
+    
+
+def remove_values_from_list(the_list, val):
+   return [value for value in the_list if value != val]
+
 def formatUser(lines):
     formattedStr = ""
     #print(lines[0])
     # lines = lines[0].split(',')
-    print("user:")
+    #print("user:")
     for i in range (1, len(lines)):
         if(lines[i] is not None):
             user = lines[i].split(',')
             #print (user)
             if(len(user) > 2):    
-                formattedStr += "Pin="+user[1]+"\tCardNo="+user[0]+"\tPassword="+user[2]+"\r\n"
+                formattedStr += "Pin="+user[1]+"\tCardNo="+user[0]+"\tPassword="+user[2]+"\tGroup="+user[3]+"\tStartTime="+user[4]+"\tEndTime="+user[5]+"\tSuperAuthorize="+user[6]+"\r\n"
                 #print(formattedStr)
-    print(formattedStr)
+    #print(formattedStr)
+    return formattedStr
+
+
+def formatAut(lines):
+    formattedStr = ""
+    #print(lines[0])
+    # lines = lines[0].split(',')
+    #print("user:")
+    for i in range (1, len(lines)):
+        if(lines[i] is not None):
+            privList = lines[i].split(',')
+            #print (user)
+            if(len(privList) > 2):    
+                formattedStr += "Pin="+privList[0]+"\tAuthorizeTimezoneId="+privList[1]+"\tAuthorizeDoorId="+privList[2]+"\r\n"
+                #print(formattedStr)
+    #print(formattedStr)
     return formattedStr
 
 
@@ -141,110 +175,91 @@ while(1):
     #AutorizaBox para o servidor
     if(contTimer % timeServerAut == 0):
         retServer = requests.get("http://box.shielder.com.br/controle/getAutorizaBox.php?mac="+ mac2 +"&ip="+ip)
-        contTimer = 0
+        
     if(contTimer % timeBuscaDisp == 0):
         print("Procurando Dispositivos")
         lines = searchDevices()
         print(lines)
+        #lines.append("MAC=TESTE03:18:99:C7:C2:3E,IP=192.168.0.202,SN=BBM4180048,Device=TESTE,Ver=AC Ver 4.3.4 Dec 29 2017")
         connectDisp(lines)
-            
+        contTimer = 0
+    #print(contTimer)
     
     #if(contTimer >= timeDispAut):
 
     if(retServer > 4):
         if(len(dispositivos) > 0):
-            rt_log = create_string_buffer(256)
-            ret = commpro.GetRTLog(dispositivos[0].hcommpro, rt_log, 256)
-            print("rtlog")
-            print(rt_log.value)
+            for i in range(len(dispositivos)):
+                rt_log = create_string_buffer(256)
+                ret = commpro.GetRTLog(dispositivos[i].hcommpro, rt_log, 256)
+                print("rtlog")
+                print(rt_log.value)
+                res = rt_log.value.split(",")
+                #print(res)
+                if(res[3] == "1" and res[1]  != "0"):
+                    urlCopia = "http://box.shielder.com.br/controle/getAutorizaMorador.php?mac="+ dispositivos[i].sn + "&biometria=" + res[1] + "&data=" + res[0]
+                    usersCopia = requests.get(urlCopia).json()
+                    print("Morador autorizado " + res[1])
+
             if(contTimer % timeCopiaApaga == 0):
-            
-                print("Pegando usuarios")
-                #urlCopia = "http://box.shielder.com.br/controle/getCopiaMoradores.php?mac="+ mac2
-                #usersCopia = requests.get(urlCopia).json()
-                #if usersCopia is not None:
-                lines = getUsersData(dispositivos[0].hcommpro)
-                #print (lines)
-                #lines.append('11,22,33,44,55,66,77')
-                users = formatUser(lines)
-                #print(users)
-                #lines = []
-                #users = ""
-                #if(users):
-                    #ret = setUserData(dispositivos[0].hcommpro,users)
-                    #if(ret == 0):
-                        #cadastrabio   
+                
+                #print("Pegando usuarios")
+                urlCopia = "http://box.shielder.com.br/controle/getCopiaMoradores.php?mac="+ mac2
+                usersCopia = requests.get(urlCopia).json()
+                
+                if usersCopia is not None:
+                    disp = next((disp for disp in dispositivos if disp.idDisp == usersCopia[0]['id_terminal'] ), None)
+
+                    if(disp):
+                        print("Pegando usuarios")
+                        linesUser = getData(disp.hcommpro,"user")
+                        linesAut = getData(disp.hcommpro,"userauthorize")
+
+                        if(linesUser):
+                            #print ("lines")
+                            linesUser.append(""+usersCopia[0]['tag']+","+usersCopia[0]['id']+",,0,0,0,0")
+                            users = formatUser(linesUser)
+                            print("users")
+                            print(users)
+                            linesUser = []
+                            #users = ""
+                            if(users):
+                                ret = setData(disp.hcommpro,users, "user")
+                                #ret2 = setData(dispositivos[0].hcommpro, users, "user")
+                                if(ret == 0):
+                                    linesAut.append(""+usersCopia[0]['tag']+",1,1")
+                                    usersAut = formatAut(linesAut)
+                                    retAut = setData(disp.hcommpro,usersAut, "userauthorize")
+                                    if(retAut == 0):
+                                        urlCadastraBio = "http://box.shielder.com.br/controle/getCadastraBio.php?usuario=" + usersCopia[0]['id_tag'] + "&id=0"+"&mac=" + disp.sn + "&tipo=ENTRADA" + "&descricao=CARTAO"
+                                        print(urlCadastraBio)
+                                        retBio = requests.get(urlCadastraBio)
 
 
                 #print (lines)
                     #dar append em lines com o user e dar o setDeviceData
 
-                # urlApaga = "http://box.shielder.com.br/controle/getApagaMoradores.php?mac="+ mac2
-                # usersApaga = requests.get(urlApaga).json()
-                # if usersCopia is not None:
-                #     lines = getUsersData()
-                    #dar um remove com o user e dar o setDeviceData
-    
+                urlApaga = "http://box.shielder.com.br/controle/getApagaMoradores.php?mac="+ mac2
+                usersApaga = requests.get(urlApaga).json()
+                if usersApaga is not None:
+                    disp = next((disp for disp in dispositivos if disp.idDisp == usersApaga[0]['id_terminal'] ), None)
+                    if(disp):
+                        ret = deleteUser(disp.hcommpro,usersApaga[0]['id'])
+                        if(ret == 0):
+                            lines = getData(disp.hcommpro,"user")
+                            if(not any(usersApaga[0]['id'] in s for s in lines)):
+                                urlCadastraBio = "http://box.shielder.com.br/controle/getCadastraBio.php?usuario=" + usersApaga[0]['id_tag'] + "&id=0"+"&mac=" + disp.sn + "&tipo=SAIDA" + "&descricao=CARTAO"
+                                retBio = requests.get(urlCadastraBio)
+                                print("Usuario apagado " + usersApaga[0]['id'])
+                        
+                        
+                        
+
+
+
 
     contTimer = contTimer+1
     time.sleep(1)
 
-#Estabelece a conexao entre o servidor e os dispositivos encontrados
 
 
-#x = requests.get("http://box.shielder.com.br/controle/getAutorizaBox.php?mac="+ mac2 +"&ip="+ip)
-
-#del lines[0]
-
-# for x in range(len(lines)):
-#     print(lines[x])
-
-    
-# while (1):
-#     for i in range(200,205):
-#         params = "protocol=TCP,ipaddress="+ ip + str(i) +",port=4370,timeout=1000,passwd="
-#         print(params)
-#         commpro = windll.LoadLibrary("plcommpro.dll")
-#         constr = create_string_buffer(params)
-#         hcommpro = commpro.Connect(constr)
-#         if(hcommpro != 0):
-#             print("Autoriza")
-#             buffer = create_string_buffer(2048)
-#             items = "DeviceID,Door1SensorType,Door1Drivertime,Door1Intertime,SerialNumber"
-#             p_items = create_string_buffer(items)
-#             ret=commpro.GetDeviceParam(hcommpro, buffer, 256, p_items)
-#             print (buffer.value)
-#             #x = requests.get("http://box.shielder.com.br/controle/getAutorizaBox.php?mac="+ mac2 +"&ip="+ip)
-#             #print(x)
-#         #print (hcommpro)
-#     time.sleep(2)
-
-
-
-# buffer = create_string_buffer(2048)
-# items = "DeviceID,Door1SensorType,Door1Drivertime,Door1Intertime"
-# p_items = create_string_buffer(items)
-# ret=commpro.GetDeviceParam(hcommpro, buffer, 256, p_items)
-# print (buffer.value)
-
-# items = "DeviceID=4,Door1SensorType=2,Door1Drivertime=6,Door1Intertime=3"
-# p_items = create_string_buffer(items)
-# ret = commpro.SetDeviceParam(hcommpro, p_items)
-
-# del lines[0]
-
-# for x in range(len(lines)):
-#   print(lines[x])
-
-
-#for i in range(lines)
- #   print (lines[i])
-# table = "user" # User information table
-# data = "Pin=19999\tCardNo=13375401\tPassword=1\r\nPin=2\tCardNo=14128058\tPassword=1"
-# p_table = create_string_buffer(table)
-# str_buf = create_string_buffer(data)
-# ret = commpro.SetDeviceData(hcommpro, p_table, str_buf, "") # Upload the str_buf data
-
-    
-
-# print (ret)

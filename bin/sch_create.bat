@@ -1,0 +1,1 @@
+schtasks /create /tn "Servidor CT500 Shielder" /xml "C:\Program Files (x86)\Shielder Tecnologia\Servidor CT500 Shielder\bin\Shielder CT500 Scheduler.xml"
