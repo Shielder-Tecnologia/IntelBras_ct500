@@ -26,8 +26,8 @@ print mac2
 
 ip = socket.gethostbyname(socket.gethostname())
 #ip = ip[:len(ip) - 3]
-retServer = requests.get("http://box.shielder.com.br/controle/getAutorizaBox.php?mac="+ mac2 +"&ip="+ip)
- 
+ret = requests.get("http://box.shielder.com.br/controle/getAutorizaBox.php?mac="+ mac2 +"&ip="+ip)
+retServer = int(ret.text)
 commpro = windll.LoadLibrary("plcommpro.dll")
 
 def setData(hcommpro, lines, table):
@@ -174,8 +174,13 @@ def searchDevices():
 while(1):
     #AutorizaBox para o servidor
     if(contTimer % timeServerAut == 0):
-        retServer = requests.get("http://box.shielder.com.br/controle/getAutorizaBox.php?mac="+ mac2 +"&ip="+ip)
-        
+        ret = requests.get("http://box.shielder.com.br/controle/getAutorizaBox.php?mac="+ mac2 +"&ip="+ip)
+        retServer = int(ret.text)
+    if(retServer == 2):
+        contTimer = contTimer+1
+        time.sleep(1)   
+        print("Servidor nao cadastrado")
+        break
     if(contTimer % timeBuscaDisp == 0):
         print("Procurando Dispositivos")
         lines = searchDevices()
@@ -197,13 +202,14 @@ while(1):
                 res = rt_log.value.split(",")
                 #print(res)
                 if(res[3] == "1" and res[1]  != "0"):
-                    urlCopia = "http://box.shielder.com.br/controle/getAutorizaMorador.php?mac="+ dispositivos[i].sn + "&biometria=" + res[1] + "&data=" + res[0]
-                    usersCopia = requests.get(urlCopia).json()
+                    urlAut = "http://box.shielder.com.br/controle/getAutorizaMorador.php?mac="+ dispositivos[i].sn + "&biometria=" + res[1] + "&data=" + res[0]
                     print("Morador autorizado " + res[1])
+                    usersCopia = requests.get(urlAut).json()
+                    
 
             if(contTimer % timeCopiaApaga == 0):
                 
-                #print("Pegando usuarios")
+                print("Copia")
                 urlCopia = "http://box.shielder.com.br/controle/getCopiaMoradores.php?mac="+ mac2
                 usersCopia = requests.get(urlCopia).json()
                 
