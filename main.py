@@ -1,6 +1,9 @@
 from ctypes import *
 import socket, time
 import requests
+import win32gui, win32con
+hide = win32gui.GetForegroundWindow()
+win32gui.ShowWindow(hide , win32con.SW_HIDE)
 
 from uuid import getnode as get_mac
 class Dispositivos:
@@ -17,6 +20,7 @@ timeDispAut = 10
 timeBuscaDisp = 240
 contTimer = 0
 timeCopiaApaga = 5
+isIpConfigured = False
 
 mac = get_mac()
 h = iter(hex(mac)[2:].zfill(12))
@@ -38,7 +42,6 @@ def setData(hcommpro, lines, table):
     str_buf = create_string_buffer(lines)
     ret = commpro.SetDeviceData(hcommpro, p_table, str_buf, "") # Upload the str_buf data
     return ret
-
 
 def getData(hcommpro,table):
     #table  Download the user data from the user table
@@ -77,7 +80,15 @@ def connectDisp(lines):
         if(len(lines[i]) > 1 and "=" in lines[i]):
             
             #print("linha"+lines[x])
-            res = dict(item.split("=") for item in lines[i].split(","))
+            # res = dict(item.split("=") for item in lines[i].split(","))
+
+            # spltDisp = res["IP"].split(".")
+            # subdomainDisp = spltDisp[0]+"."+spltDisp[1]+"."+spltDisp[2]
+
+            # spltServer = ip.split(".")
+            # subdomainServer = spltServer[0]+"."+spltServer[1]+"."+spltServer[2]
+
+            
             params = "protocol=TCP,ipaddress="+ res["IP"] +",port=4370,timeout=1000,passwd="
             print("parametros"+params)
             if(not any(x for x in dispositivos if x.sn == res["SN"])):
@@ -168,8 +179,11 @@ def searchDevices():
     dev_buf = create_string_buffer("", 64*1024)
     ret=commpro.SearchDevice("UDP", "255.255.255.255", dev_buf)
     lines = dev_buf.value.split('\r\n')
-    return lines
+    return lines    
 #Busca por UDP de devices na rede 
+
+
+
 
 while(1):
     #AutorizaBox para o servidor
