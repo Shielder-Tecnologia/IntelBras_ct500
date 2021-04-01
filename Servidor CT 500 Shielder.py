@@ -2,16 +2,12 @@ from ctypes import *
 import socket, time
 import requests
 import win32gui, win32con
+from tkinter import *
 hide = win32gui.GetForegroundWindow()
 win32gui.ShowWindow(hide , win32con.SW_HIDE)
 
 from uuid import getnode as get_mac
-class Dispositivos:
-    def __init__ (self, ip, sn, idDisp, hcommpro):
-        self.sn = sn
-        self.ip = ip
-        self.idDisp = idDisp
-        self.hcommpro = hcommpro
+
 
 dispositivos = []
 retServer = 0
@@ -20,8 +16,6 @@ timeDispAut = 10
 timeBuscaDisp = 240
 contTimer = 0
 timeCopiaApaga = 5
-isIpConfigured = False
-
 mac = get_mac()
 h = iter(hex(mac)[2:].zfill(12))
 mac2 = ":".join(i + next(h) for i in h)
@@ -29,10 +23,112 @@ print mac2
 
 
 ip = socket.gethostbyname(socket.gethostname())
+commpro = windll.LoadLibrary("plcommpro.dll")
+
+class Dispositivos:
+    def __init__ (self, ip, sn, idDisp, hcommpro):
+        self.sn = sn
+        self.ip = ip
+        self.idDisp = idDisp
+        self.hcommpro = hcommpro
+
+def connectDisp(lines):
+    global timeBuscaDisp
+
+    if(not any('=' in s for s in lines)):
+        print("Nenhum dispositivo encontrado")
+        timeBuscaDisp = 60
+    
+    for i in range(len(lines)):
+        #print("linha"+ lines[x])
+        
+        if(len(lines[i]) > 1 and "=" in lines[i]):
+            
+           # print("linha"+lines[x])
+            res = dict(item.split("=") for item in lines[i].split(","))
+
+            # spltDisp = res["IP"].split(".")
+            # subdomainDisp = spltDisp[0]+"."+spltDisp[1]+"."+spltDisp[2]
+
+            # spltServer = ip.split(".")
+            # subdomainServer = spltServer[0]+"."+spltServer[1]+"."+spltServer[2]
+
+            # if(subdomainServer != subdomainDisp):
+            #     #print(res["MAC"])
+            #     macDisp.set( res["MAC"])
+            #     #print (macDisp)
+            #     ipantigo.set(res["IP"])
+            #     ipNewVar.set(subdomainServer)
+            #     gatewayVar.set(subdomainServer)
+                
+            #     app.lift()
+            #     app.mainloop()
+            #     #app.mainloop()
+            #     params = "protocol=TCP,ipaddress="+ txt_ipnew.get()+",port=4370,timeout=2000,passwd="
+            # else:
+            #     params = "protocol=TCP,ipaddress="+ res["IP"] +",port=4370,timeout=2000,passwd="
+            params = "protocol=TCP,ipaddress="+ res["IP"] +",port=4370,timeout=2000,passwd="
+            
+
+            
+            print("parametros"+params)
+            if(not any(x for x in dispositivos if x.sn == res["SN"])):
+
+
+                print("Conectando ao dispositivo "+ res["IP"])
+                constr = create_string_buffer(params)
+                hcommpro = commpro.Connect(constr)
+                print (hcommpro)
+
+                if(hcommpro != 0):
+                    timeBuscaDisp = 360
+
+                    url = "http://box.shielder.com.br/controle/getAutorizaBox.php?mac="+ res["SN"] +"&ip="+res["IP"]
+                    idterminal = requests.get(url)
+                    print("autoriza retorno "+idterminal.text)
+                    if(int(idterminal.text)>=4):
+                        #SETAR O ID DISP
+                        items = "DeviceID="+idterminal.text+",Door1SensorType=2,Door1Drivertime=6,Door1Intertime=3"
+                        p_items = create_string_buffer(items)
+                        ret = commpro.SetDeviceParam(hcommpro, p_items)
+                        if(ret == 0):
+                            disp = Dispositivos(res["IP"],res["SN"], idterminal.text, hcommpro)
+                            dispositivos.append(disp)
+                            print(disp.sn)
+                else:
+                    timeBuscaDisp = 20
+                # buffer = create_string_buffer(2048)
+                # items = "DeviceID,Door1SensorType,Door1Drivertime,Door1Intertime"
+                # p_items = create_string_buffer(items)
+                # ret=commpro.GetDeviceParam(hcommpro, buffer, 256, p_items)
+                # print (buffer.value)
+                
+                
+
+
+                #x = requests.get("http://box.shielder.com.br/controle/getAutorizaBox.php?mac="+ res["SN"] +"&ip="+res["IP"])
+                time.sleep(2)
+
+    for i in range(len(dispositivos)):
+        if not any(dispositivos[i].sn in s for s in lines):
+            print("Dispositivo desconectado "+dispositivos[i].ip)
+            dispositivos.pop(i)
+            print("Procurando Dispositivos novamente")
+            searchDevices()
+
+def searchDevices():
+    dev_buf = create_string_buffer("", 64*1024)
+    ret=commpro.SearchDevice("UDP", "255.255.255.255", dev_buf)
+    lines = dev_buf.value.split('\r\n')
+    print (lines)
+    connectDisp(lines)
+    #return lines    
+#app.mainloop()
+
 #ip = ip[:len(ip) - 3]
 ret = requests.get("http://box.shielder.com.br/controle/getAutorizaBox.php?mac="+ mac2 +"&ip="+ip)
 retServer = int(ret.text)
-commpro = windll.LoadLibrary("plcommpro.dll")
+
 
 def setData(hcommpro, lines, table):
     #for i in range(lines):
@@ -63,79 +159,13 @@ def getData(hcommpro,table):
 
 def deleteUser(hcommpro, user):
     table = "user"
-    data = "Pin="+str(user) # Conditions of deleting the data
+    data = "Pin="+user.__str__() # Conditions of deleting the data
     p_table = create_string_buffer(table)
     p_data = create_string_buffer(data)
     ret = commpro.DeleteDeviceData(hcommpro, p_table, p_data, "")
     return ret
 
-def connectDisp(lines):
-    if(not any('=' in s for s in lines)):
-        print("Nenhum dispositivo encontrado")
-        timeBuscaDisp = 60
-    
-    for i in range(len(lines)):
-        #print("linha"+ lines[x])
-        
-        if(len(lines[i]) > 1 and "=" in lines[i]):
-            
-            #print("linha"+lines[x])
-            # res = dict(item.split("=") for item in lines[i].split(","))
 
-            # spltDisp = res["IP"].split(".")
-            # subdomainDisp = spltDisp[0]+"."+spltDisp[1]+"."+spltDisp[2]
-
-            # spltServer = ip.split(".")
-            # subdomainServer = spltServer[0]+"."+spltServer[1]+"."+spltServer[2]
-
-            
-            params = "protocol=TCP,ipaddress="+ res["IP"] +",port=4370,timeout=1000,passwd="
-            print("parametros"+params)
-            if(not any(x for x in dispositivos if x.sn == res["SN"])):
-
-
-                print("Conectando ao dispositivo"+ res["IP"])
-                constr = create_string_buffer(params)
-                hcommpro = commpro.Connect(constr)
-                print (hcommpro)
-
-                if(hcommpro != 0):
-                    timeBuscaDisp = 360
-
-                    url = "http://box.shielder.com.br/controle/getAutorizaBox.php?mac="+ res["SN"] +"&ip="+res["IP"]
-                    idterminal = requests.get(url)
-                    print("autoriza retorno "+str(idterminal.text))
-                    if(int(idterminal.text)>=4):
-                        #SETAR O ID DISP
-                        items = "DeviceID="+str(idterminal.text)+",Door1SensorType=2,Door1Drivertime=6,Door1Intertime=3"
-                        p_items = create_string_buffer(items)
-                        ret = commpro.SetDeviceParam(hcommpro, p_items)
-                        if(ret == 0):
-                            disp = Dispositivos(res["IP"],res["SN"], str(idterminal.text), hcommpro)
-                            dispositivos.append(disp)
-                            print(disp.sn)
-                
-                # buffer = create_string_buffer(2048)
-                # items = "DeviceID,Door1SensorType,Door1Drivertime,Door1Intertime"
-                # p_items = create_string_buffer(items)
-                # ret=commpro.GetDeviceParam(hcommpro, buffer, 256, p_items)
-                # print (buffer.value)
-                
-                
-
-
-                #x = requests.get("http://box.shielder.com.br/controle/getAutorizaBox.php?mac="+ res["SN"] +"&ip="+res["IP"])
-                time.sleep(2)
-
-    for i in range(len(dispositivos)):
-        if not any(dispositivos[i].sn in s for s in lines):
-            print("Dispositivo desconectado "+dispositivos[i].ip)
-            dispositivos.pop(i)
-            print("Procurando Dispositivos novamente")
-            lines = searchDevices()
-            print(lines)
-            #lines.append("MAC=TESTE03:18:99:C7:C2:3E,IP=192.168.0.202,SN=BBM4180048,Device=TESTE,Ver=AC Ver 4.3.4 Dec 29 2017")
-            connectDisp(lines)
             
 
     
@@ -175,11 +205,7 @@ def formatAut(lines):
     return formattedStr
 
 
-def searchDevices():
-    dev_buf = create_string_buffer("", 64*1024)
-    ret=commpro.SearchDevice("UDP", "255.255.255.255", dev_buf)
-    lines = dev_buf.value.split('\r\n')
-    return lines    
+
 #Busca por UDP de devices na rede 
 
 
@@ -197,10 +223,7 @@ while(1):
         break
     if(contTimer % timeBuscaDisp == 0):
         print("Procurando Dispositivos")
-        lines = searchDevices()
-        print(lines)
-        #lines.append("MAC=TESTE03:18:99:C7:C2:3E,IP=192.168.0.202,SN=BBM4180048,Device=TESTE,Ver=AC Ver 4.3.4 Dec 29 2017")
-        connectDisp(lines)
+        searchDevices()
         contTimer = 0
     #print(contTimer)
     
