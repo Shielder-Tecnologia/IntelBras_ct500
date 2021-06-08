@@ -8,4 +8,4 @@ if /i "%PROCESSOR_IDENTIFIER:~0,3%"=="X86" (
 		copy .\32\*.dll %windir%\SysWOW64\
 		regsvr32 %windir%\SysWOW64\zkemkeeper.dll
 	)
-exit
+exit 
