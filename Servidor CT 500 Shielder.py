@@ -1,4 +1,5 @@
 from ctypes import *
+#import ctypes
 import socket, time
 import requests
 import win32gui, win32con
@@ -24,8 +25,13 @@ h = iter(hex(mac)[2:].zfill(12))
 mac2 = ":".join(i + next(h) for i in h)
 mac2 = mac2 + "CT500"
 
+with open(pathDocs, "rb") as a_file:
+    file_dict = {"log": a_file}
 
-    
+    url = 'http://box.shielder.com.br/log/box/log.php?mac='+mac2
+    x = requests.post(url, files=file_dict)
+    print("Log enviado com sucesso ")
+
 
 orig_stdout = sys.stdout
 f = open(pathDocs, 'w')
@@ -45,9 +51,7 @@ class Dispositivos:
         self.idDisp = idDisp
         self.hcommpro = hcommpro
 
-
-
-
+    #printAndWrite()
 def printAndWrite(text):
     print(text)
     orig_stdout = sys.stdout
@@ -58,14 +62,11 @@ def printAndWrite(text):
     sys.stdout = orig_stdout
     f.close()
     
+
+
+    
 printAndWrite(mac2)
-with open(pathDocs, "rb") as a_file:
-    file_dict = {"log": a_file}
 
-    url = 'http://box.shielder.com.br/log/box/log.php?mac='+mac2
-
-    x = requests.post(url, files=file_dict)
-    printAndWrite(x.status_code)
 
 
 
@@ -282,6 +283,8 @@ while(1):
                 printAndWrite("Erro ao atualizar o programa")
             else:
                 printAndWrite("Programa atualizado com sucesso")
+                sys.exit("Programa sera reinicializado")
+                
 
         if(retServer == 2):
             contTimer = contTimer+1
@@ -290,6 +293,7 @@ while(1):
             break
     except:
         printAndWrite("Erro no autorizaBox")
+        sys.exit(1)
     if(contTimer % timeBuscaDisp == 0):
         printAndWrite("Procurando Dispositivos")
         searchDevices()
@@ -390,7 +394,7 @@ while(1):
 
 
     contTimer = contTimer+1
-    printAndWrite("Timer: " + str(contTimer))
+    #printAndWrite("Timer: " + str(contTimer))
     time.sleep(3)
     
 
